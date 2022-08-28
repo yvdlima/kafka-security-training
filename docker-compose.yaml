@@ -1,44 +1,66 @@
 version: '3' 
 volumes:
   kafka-data:
+  zookeeper-data:
+
 services:
   kafka:
-    image: bitnami/kafka
+    image: bitnami/kafka:3.2.1
+    hostname: kafka.local
     ports:
       - '9092:9092'
       - '9093:9093'
     environment:
       KAFKA_BROKER_ID: '1'
-      ALLOW_PLAINTEXT_LISTENER: 'yes'
       KAFKA_CFG_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT"
-      KAFKA_CFG_LISTENERS: "CLIENT://:9092,EXTERNAL://:9093"
-      KAFKA_CFG_ADVERTISED_LISTENERS: "CLIENT://kafka:9092,EXTERNAL://localhost:9093"
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "CLIENT"
-      # KAFKA_CFG_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_ZOOKEEPER_PROTOCOL: 'SASL_PLAIN'
+      KAFKA_ZOOKEEPER_USER: 'ksec'
+      KAFKA_ZOOKEEPER_PASSWORD: 'supersecure'
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: 'CLIENT:SSL,EXTERNAL:SSL'
+      KAFKA_CFG_LISTENERS: 'CLIENT://:9093,EXTERNAL://:9092'
+      KAFKA_CFG_ADVERTISED_LISTENERS: 'CLIENT://kafka.local:9093,EXTERNAL://localhost:9092'
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: 'CLIENT'
+      KAFKA_CERTIFICATE_PASSWORD: ${CERT_PASSWORD}
     depends_on:
       - zookeeper
     volumes:
-      - kafka-data:/bitnami/kafka
+      - kafka-data:/bitnami/kafka/data
+      - ./truststore/kafka.truststore.jks:/bitnami/kafka/config/certs/kafka.truststore.jks:ro
+      - ./keystore/kafka.keystore.jks:/bitnami/kafka/config/certs/kafka.keystore.jks:ro
   zookeeper:
-    image: bitnami/zookeeper
+    image: bitnami/zookeeper:3.8.0
     ports:
       - '2181:2181'
+    volumes:
+      - zookeeper-data:/bitnami/zookeper
     environment:
-      ALLOW_ANONYMOUS_LOGIN: 'yes'
+      ZOO_ENABLE_AUTH: 'yes'
+      ZOO_SERVER_USERS: 'ksec'
+      ZOO_SERVER_PASSWORDS: 'supersecure'
       ZOO_4LW_COMMANDS_WHITELIST: '*'
+
   kcat:
     image: edenhill/kcat:1.7.1
-    profiles: ["tools"]
+    profiles: ['tools']
     volumes:
       - ./conf/kcat:/kcat
+      - ./keystore:/kcat-ssl
     environment:
       KCAT_CONFIG: /kcat/kcat.conf
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    profiles: ["tools"]
+    profiles: ['tools']
     ports:
       - '8080:8080'
     environment:
-      KAFKA_CLUSTERS_0_NAME: 'compose'
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka:9092'
+      KAFKA_CLUSTERS_0_NAME: 'local'
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SSL
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka.local:9093'
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /kafka.truststore.jks
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${CERT_PASSWORD}
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: /kafka.keystore.jks
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: ${CERT_PASSWORD}
+    volumes:
+      - ./truststore/kafka.truststore.jks:/kafka.truststore.jks:ro
+      - ./keystore/kafka.keystore.jks:/kafka.keystore.jks:ro

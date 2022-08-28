@@ -1,0 +1,44 @@
+version: '3' 
+volumes:
+  kafka-plain-data:
+services:
+  kafka:
+    image: bitnami/kafka
+    ports:
+      - '9092:9092'
+      - '9093:9093'
+    environment:
+      KAFKA_BROKER_ID: '1'
+      ALLOW_PLAINTEXT_LISTENER: 'yes'
+      KAFKA_CFG_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CFG_LISTENERS: "CLIENT://:9092,EXTERNAL://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "CLIENT://kafka:9092,EXTERNAL://localhost:9093"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "CLIENT"
+      # KAFKA_CFG_SASL_ENABLED_MECHANISMS: PLAIN
+    depends_on:
+      - zookeeper
+    volumes:
+      - kafka-plain-data::/bitnami/kafka
+  zookeeper:
+    image: bitnami/zookeeper
+    ports:
+      - '2181:2181'
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+      ZOO_4LW_COMMANDS_WHITELIST: '*'
+  kcat:
+    image: edenhill/kcat:1.7.1
+    profiles: ["tools"]
+    volumes:
+      - ./conf/plain:/kcat
+    environment:
+      KCAT_CONFIG: /kcat/kcat-plain.conf
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    profiles: ["tools"]
+    ports:
+      - '8080:8080'
+    environment:
+      KAFKA_CLUSTERS_0_NAME: 'compose'
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka:9092'
